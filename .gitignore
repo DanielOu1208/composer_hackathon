@@ -9,3 +9,4 @@ dist/
 .env.production
 .env.development
 vault.enc.json
+requests.json

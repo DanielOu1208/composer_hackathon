@@ -17,6 +17,7 @@ type Req = {
 export default function ApprovalsPage() {
   const [requests, setRequests] = useState<Req[]>([]);
   const [loading, setLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch("/api/requests");
@@ -30,16 +31,26 @@ export default function ApprovalsPage() {
   }, []);
 
   async function approve(requestId: string, approved: boolean) {
-    const res = await fetch("/api/approve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ requestId, approved }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      load();
-    } else {
-      alert(data.error || "Failed");
+    setApprovingId(requestId);
+    try {
+      const res = await fetch("/api/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, approved }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        load();
+      } else {
+        const msg = data.requestId
+          ? `${data.error || "Failed"} (id: ${data.requestId})`
+          : (data.error || "Failed");
+        alert(msg);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Network or other error");
+    } finally {
+      setApprovingId(null);
     }
   }
 
@@ -81,9 +92,23 @@ export default function ApprovalsPage() {
                     <td><pre className="pre" style={{ margin: 0, fontSize: "0.85rem" }}>{JSON.stringify(r.params)}</pre></td>
                     <td>{new Date(r.createdAt).toLocaleString()}</td>
                     <td>
-                      <button className="success" onClick={() => approve(r.id, true)}>Approve</button>
+                      <button
+                        type="button"
+                        className="success"
+                        disabled={approvingId !== null}
+                        onClick={() => approve(r.id, true)}
+                      >
+                        {approvingId === r.id ? "Approving…" : "Approve"}
+                      </button>
                       {" "}
-                      <button className="danger" onClick={() => approve(r.id, false)}>Deny</button>
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={approvingId !== null}
+                        onClick={() => approve(r.id, false)}
+                      >
+                        {approvingId === r.id ? "…" : "Deny"}
+                      </button>
                     </td>
                   </tr>
                 ))}

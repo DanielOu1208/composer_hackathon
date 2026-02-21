@@ -9,7 +9,7 @@ import { executeHandler } from "@/lib/handlers";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const requestId = body.requestId as string | undefined;
+    const requestId = typeof body.requestId === "string" ? body.requestId.trim() : undefined;
     const approved = body.approved === true;
     if (!requestId) {
       return NextResponse.json(
@@ -19,7 +19,10 @@ export async function POST(request: NextRequest) {
     }
     const req = getRequest(requestId);
     if (!req) {
-      return NextResponse.json({ error: "Request not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Request not found", requestId },
+        { status: 404 }
+      );
     }
     if (req.status !== "pending") {
       return NextResponse.json(

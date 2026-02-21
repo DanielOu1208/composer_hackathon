@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRequest, appendLog } from "@/lib/store";
 
-const ALLOWED_ACTIONS = ["hello_world", "github_create_issue"];
+const ALLOWED_ACTIONS = ["hello_world", "github_create_issue", "openai_chat", "llm_chat"];
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,13 +1,10 @@
-import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
-import { mkdirSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { homedir } from "node:os";
 
 const CONFIG_DIR = join(homedir(), ".config", "agentvault");
-const DB_PATH = join(CONFIG_DIR, "audit.db");
-
-let db: Database.Database | null = null;
+const AUDIT_PATH = join(CONFIG_DIR, "audit.json");
 
 export type AuditAction =
   | "SECRET_CREATED"
@@ -31,31 +28,28 @@ export interface AuditEntry {
   hash: string;
 }
 
+interface AuditFile {
+  entries: AuditEntry[];
+}
+
 function ensureDir(): void {
-  const dir = dirname(DB_PATH);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+  if (!existsSync(CONFIG_DIR)) {
+    mkdirSync(CONFIG_DIR, { recursive: true });
   }
 }
 
-function getDb(): Database.Database {
-  if (!db) {
-    ensureDir();
-    db = new Database(DB_PATH);
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS audit (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TEXT NOT NULL,
-        actor TEXT NOT NULL,
-        action TEXT NOT NULL,
-        resource TEXT NOT NULL,
-        outcome TEXT NOT NULL,
-        prev_hash TEXT NOT NULL,
-        hash TEXT NOT NULL
-      );
-    `);
+function loadAuditFile(): AuditFile {
+  ensureDir();
+  if (!existsSync(AUDIT_PATH)) {
+    return { entries: [] };
   }
-  return db;
+  const raw = readFileSync(AUDIT_PATH, "utf-8");
+  return JSON.parse(raw) as AuditFile;
+}
+
+function saveAuditFile(data: AuditFile): void {
+  ensureDir();
+  writeFileSync(AUDIT_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
 function canonicalJson(obj: Omit<AuditEntry, "hash">): string {
@@ -83,11 +77,9 @@ export function appendAudit(
   resource: string,
   outcome: string
 ): string {
-  const database = getDb();
-  const last = database
-    .prepare("SELECT hash FROM audit ORDER BY id DESC LIMIT 1")
-    .get() as { hash: string } | undefined;
-  const prevHash = last?.hash ?? "0";
+  const auditFile = loadAuditFile();
+  const entries = auditFile.entries;
+  const prevHash = entries.length > 0 ? entries[entries.length - 1].hash : "0";
 
   const timestamp = new Date().toISOString();
   const entry: Omit<AuditEntry, "hash"> = {
@@ -100,19 +92,8 @@ export function appendAudit(
   };
   const hash = computeHash(prevHash, entry);
 
-  database
-    .prepare(
-      "INSERT INTO audit (timestamp, actor, action, resource, outcome, prev_hash, hash) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    )
-    .run(
-      entry.timestamp,
-      entry.actor,
-      entry.action,
-      entry.resource,
-      entry.outcome,
-      entry.prev_hash,
-      hash
-    );
+  entries.push({ ...entry, hash });
+  saveAuditFile(auditFile);
 
   return hash;
 }
@@ -121,30 +102,26 @@ export function appendAudit(
  * Verify the hash chain. Returns true if valid.
  */
 export function verifyAuditChain(): { valid: boolean; error?: string } {
-  const database = getDb();
-  const rows = database
-    .prepare(
-      "SELECT timestamp, actor, action, resource, outcome, prev_hash, hash FROM audit ORDER BY id"
-    )
-    .all() as Array<Omit<AuditEntry, "hash"> & { hash: string }>;
+  const auditFile = loadAuditFile();
+  const entries = auditFile.entries;
 
   let prevHash = "0";
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (row.prev_hash !== prevHash) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    if (entry.prev_hash !== prevHash) {
       return {
         valid: false,
-        error: `Entry ${i + 1}: prev_hash mismatch (expected ${prevHash}, got ${row.prev_hash})`,
+        error: `Entry ${i + 1}: prev_hash mismatch (expected ${prevHash}, got ${entry.prev_hash})`,
       };
     }
-    const expectedHash = computeHash(prevHash, row);
-    if (row.hash !== expectedHash) {
+    const expectedHash = computeHash(prevHash, entry);
+    if (entry.hash !== expectedHash) {
       return {
         valid: false,
         error: `Entry ${i + 1}: hash mismatch (chain broken)`,
       };
     }
-    prevHash = row.hash;
+    prevHash = entry.hash;
   }
   return { valid: true };
 }

@@ -1,32 +1,37 @@
 {
   "name": "agentvault",
   "version": "1.0.0",
-  "description": "Local MCP secret management proxy - TeamVault-inspired",
+  "description": "Local MCP secret management proxy & gateway - TeamVault-inspired",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "agentvault": "./bin/agentvault"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.cli.json",
+    "build:cli": "tsc -p tsconfig.cli.json",
+    "build:web": "next build",
     "start": "node bin/agentvault",
     "dev": "tsx src/index.ts",
+    "dev:web": "next dev",
     "proxy": "tsx src/index.ts proxy"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "keytar": "^7.9.0",
-    "better-sqlite3": "^11.0.0",
     "commander": "^12.0.0",
     "blessed": "^0.1.81",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "next": "^16.1.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
     "tsx": "^4.7.0",
-    "@types/better-sqlite3": "^7.6.0",
     "@types/blessed": "^0.1.25",
-    "@types/node": "^20.10.0"
+    "@types/node": "^20.10.0",
+    "@types/react": "^18",
+    "@types/react-dom": "^18"
   },
   "engines": {
     "node": ">=20.0.0"

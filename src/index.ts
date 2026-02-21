@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { startProxyServer } from "./proxy/server.js";
+import { startServeServer } from "./proxy/serve.js";
 import { printCursorConfig } from "./cli/print-cursor-config.js";
 import { kvPut, kvList, kvDelete } from "./cli/kv.js";
 import { profileAdd, profileList, profileDelete } from "./cli/profile-cli.js";
@@ -26,6 +27,14 @@ program
       profile: opts.profile,
       approvalMode: opts.approvalMode === "cli" ? "cli" : "none",
     });
+  });
+
+program
+  .command("serve")
+  .description("Start AgentVault MCP server (register in Cursor mcp.json)")
+  .action(async () => {
+    const { startMcpServer } = await import("./mcp/serve.js");
+    await startMcpServer();
   });
 
 program

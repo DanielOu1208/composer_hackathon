@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const distPath = join(__dirname, "..", "dist", "index.js");
+const srcPath = join(__dirname, "..", "src", "index.ts");
+
+const scriptPath = existsSync(distPath) ? distPath : srcPath;
+const useTsx = scriptPath.endsWith(".ts");
+const args = useTsx ? ["tsx", scriptPath, ...process.argv.slice(2)] : [scriptPath, ...process.argv.slice(2)];
+const cmd = useTsx ? "npx" : "node";
+
+const child = spawn(cmd, args, {
+  stdio: "inherit",
+  cwd: join(__dirname, ".."),
+});
+
+child.on("exit", (code) => {
+  process.exit(code ?? 0);
+});

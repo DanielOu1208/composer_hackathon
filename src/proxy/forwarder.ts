@@ -5,6 +5,42 @@ import { createLeaseRequest, setLeaseRequestHandler } from "../lease/lease.js";
 import { appendAudit } from "../audit/log.js";
 
 /**
+ * Parse Server-Sent Events (SSE) body and extract JSON payloads from data: lines.
+ * Returns array of raw JSON strings (one per event).
+ */
+function parseSseToJsonLines(body: string): string[] {
+  const lines = body.split("\n");
+  const results: string[] = [];
+  let currentData: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("data:")) {
+      const data = line.slice(5).replace(/^\s+/, "");
+      if (data === "[DONE]" || data === "") continue;
+      currentData.push(data);
+    } else if (line.trim() === "" && currentData.length > 0) {
+      const jsonStr = currentData.join("\n");
+      results.push(jsonStr);
+      currentData = [];
+    }
+  }
+  if (currentData.length > 0) {
+    results.push(currentData.join("\n"));
+  }
+  return results;
+}
+
+function isSseResponse(body: string, contentType: string | null): boolean {
+  const ct = (contentType ?? "").toLowerCase();
+  const trimmed = body.trimStart();
+  return (
+    ct.includes("text/event-stream") ||
+    trimmed.startsWith("event:") ||
+    trimmed.startsWith("data:")
+  );
+}
+
+/**
  * Forward a JSON-RPC message to the remote MCP server with auth header injection.
  * Enforces policy and response size limit.
  * When requireApproval is true, blocks until user approves via CLI.
@@ -110,6 +146,21 @@ export async function forwardMessage(
   }
 
   appendAudit("proxy", "PROXY_EXECUTED", profile.remoteUrl, method);
+
+  const contentType = response.headers.get("content-type");
+  if (isSseResponse(responseBody, contentType)) {
+    const jsonLines = parseSseToJsonLines(responseBody);
+    const validLines = jsonLines.filter((s) => {
+      try {
+        JSON.parse(s);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    return validLines.length > 0 ? validLines.join("\n") + "\n" : "";
+  }
+
   return responseBody.trim() ? responseBody + "\n" : "";
 }
 
@@ -121,7 +172,7 @@ function createJsonRpcError(
   const msg = message as { id?: string | number };
   return {
     jsonrpc: "2.0",
-    id: msg?.id ?? null,
+    id: msg?.id ?? 0,
     error: { code, message: errorMsg },
   };
 }

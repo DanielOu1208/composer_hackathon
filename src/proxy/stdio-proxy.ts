@@ -49,7 +49,7 @@ export function runStdioProxy(
         const errorMsg = err instanceof Error ? err.message : String(err);
         const errorResponse = {
           jsonrpc: "2.0",
-          id: null,
+          id: 0,
           error: { code: -32700, message: `Parse error: ${errorMsg}` },
         };
         process.stdout.write(serializeMessage(errorResponse));
